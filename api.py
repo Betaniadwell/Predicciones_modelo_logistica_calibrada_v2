@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -32,9 +32,16 @@ app = FastAPI(
     title="Income Classifier API",
     description=(
         "Estimador de ingresos >50K/año sobre UCI Adult Census. "
-        "Regresión logística calibrada con 24 variables y umbral optimizado."
+        "Regresión logística calibrada con 24 variables y umbral optimizado.\n\n"
+        "**El ejemplo de cada endpoint ya es ejecutable**: pulsa *Try it out* → *Execute* y devuelve "
+        "una predicción real. Las etiquetas de texto admitidas (en español o en inglés) están en "
+        "`GET /model-info` → `categorias`; una etiqueta no válida devuelve 422 con la lista de las "
+        "válidas.\n\n"
+        "Referencia: en los datos reales el **23,9 %** de las personas supera los 50K/año. "
+        "Una probabilidad por debajo de esa tasa significa *menos probable que la media*, no "
+        "imposible."
     ),
-    version="4.0.0",
+    version="4.0.1",
     contact={"name": "Income Classifier Pro"},
 )
 
@@ -51,16 +58,33 @@ app.add_middleware(
 # Esquemas
 # -------------------------------------------------------------------------
 class Registro(BaseModel):
-    edad: float = Field(..., ge=0, le=90, description="Edad en años (17-90 en entrenamiento)")
-    educacion: float = Field(..., ge=0, le=20, description="Años de educación formal")
-    horas_por_semana: float = Field(..., ge=0, le=99, description="Horas trabajadas por semana (1-99 en entrenamiento)")
-    ganancia_capital: float = Field(..., ge=0, le=99999, description="Ganancia de capital en USD")
-    perdida_capital: float = Field(..., ge=0, le=4356, description="Pérdida de capital en USD")
-    clase_trabajo: str = Field(..., description="Etiqueta de clase de trabajo")
-    estado_civil: str = Field(..., description="Etiqueta de estado civil")
-    ocupacion: str = Field(..., description="Etiqueta de ocupación")
-    relacion_familiar: str = Field(..., description="Etiqueta de relación familiar")
-    pais_origen: str = Field(..., description="Etiqueta de país de origen")
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "edad": 45,
+                "educacion": 18,
+                "horas_por_semana": 45,
+                "ganancia_capital": 0,
+                "perdida_capital": 0,
+                "clase_trabajo": "Empleado sector privado",
+                "estado_civil": "Casado/a (cónyuge presente)",
+                "ocupacion": "Gerencia / Ejecutivo",
+                "relacion_familiar": "Esposa",
+                "pais_origen": "Estados Unidos",
+            }
+        }
+    }
+
+    edad: float = Field(..., ge=0, le=90, description="Edad en años (17-90 en entrenamiento)", examples=[45])
+    educacion: float = Field(..., ge=0, le=20, description="Años de educación formal", examples=[18])
+    horas_por_semana: float = Field(..., ge=0, le=99, description="Horas trabajadas por semana (1-99 en entrenamiento)", examples=[45])
+    ganancia_capital: float = Field(..., ge=0, le=99999, description="Ganancia de capital en USD", examples=[0])
+    perdida_capital: float = Field(..., ge=0, le=4356, description="Pérdida de capital en USD", examples=[0])
+    clase_trabajo: str = Field(..., description="Etiqueta de clase de trabajo (ver /model-info → categorias)", examples=["Empleado sector privado"])
+    estado_civil: str = Field(..., description="Etiqueta de estado civil (ver /model-info → categorias)", examples=["Casado/a (cónyuge presente)"])
+    ocupacion: str = Field(..., description="Etiqueta de ocupación (ver /model-info → categorias)", examples=["Gerencia / Ejecutivo"])
+    relacion_familiar: str = Field(..., description="Etiqueta de relación familiar (ver /model-info → categorias)", examples=["Esposa"])
+    pais_origen: str = Field(..., description="Etiqueta de país de origen (ver /model-info → categorias)", examples=["Estados Unidos"])
 
 
 class RespuestaPrediccion(BaseModel):
@@ -102,7 +126,7 @@ def _a_datos(reg: Registro) -> dict:
 def raiz():
     return {
         "servicio": "Income Classifier API",
-        "version": "4.0.0",
+        "version": "4.0.1",
         "docs": "/docs",
         "endpoints": {
             "GET /health": "Estado del servicio y del modelo",
@@ -171,7 +195,26 @@ def predict(registro: Registro, umbral: float | None = None):
 
 
 @app.post("/predict/batch", tags=["prediccion"], summary="Predicción de varios registros")
-def predict_batch(registros: list[Registro], umbral: float | None = None):
+def predict_batch(
+    registros: list[Registro] = Body(
+        ...,
+        example=[
+            {
+                "edad": 45,
+                "educacion": 18,
+                "horas_por_semana": 45,
+                "ganancia_capital": 0,
+                "perdida_capital": 0,
+                "clase_trabajo": "Empleado sector privado",
+                "estado_civil": "Casado/a (cónyuge presente)",
+                "ocupacion": "Gerencia / Ejecutivo",
+                "relacion_familiar": "Esposa",
+                "pais_origen": "Estados Unidos",
+            }
+        ],
+    ),
+    umbral: float | None = None,
+):
     pkg = _paquete()
     if umbral is None:
         umbral = pkg["umbral"]
