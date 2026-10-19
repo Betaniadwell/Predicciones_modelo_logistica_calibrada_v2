@@ -19,10 +19,12 @@ import sklearn
 # =========================================================================
 
 # Transformacion: (x - min) / (max - min)
+# v3: entrenado sobre el UCI Adult real -> "horas_por_semana" son HORAS por
+# semana (columna hours-per-week, rango 1-99), no semanas trabajadas al año.
 ESCALADO = {
     "edad": (0, 90),
     "anios_educacion": (0, 20),
-    "horas_por_semana": (0, 52),
+    "horas_por_semana": (0, 99),
     "ganancia_capital": (0, 99999),
     "perdida_capital": (0, 4356),
 }
@@ -112,11 +114,33 @@ MAPEO_RAW = {
 
 NIVELES_EDUCACION = [0, 3, 5.5, 7.5, 9, 10, 11, 12, 13, 14, 16, 18, 19, 20]
 
+# Etiqueta legible de cada nivel (mismo mapeo con el que se entreno el v3)
+ETIQUETAS_EDUCACION = {
+    0: "Sin estudios (preescolar)",
+    3: "Primaria (1º–4º grado)",
+    5.5: "Primaria (5º–6º grado)",
+    7.5: "Secundaria inferior (7º–8º)",
+    9: "9º grado",
+    10: "10º grado",
+    11: "11º grado",
+    12: "12º grado (sin diploma)",
+    13: "Bachillerato (HS-grad)",
+    14: "Algo de universidad",
+    16: "Técnico superior (Associate)",
+    18: "Licenciatura / Grado",
+    19: "Máster",
+    20: "Doctorado / profesional",
+}
+
+# Proporcion real de ingresos >50K en los datos de entrenamiento (UCI Adult):
+# 11.687 de 48.790 personas. Es la referencia para interpretar un porcentaje.
+TASA_BASE = 0.2394
+
 ALIAS_CSV = {
     "edad": "edad", "age": "edad",
     "educacion": "educacion", "education_years": "educacion", "anios_educacion": "educacion",
-    "horas_por_semana": "horas_por_semana", "semanas_trabajadas": "horas_por_semana",
-    "weeks_worked": "horas_por_semana", "hours_per_week": "horas_por_semana",
+    "horas_por_semana": "horas_por_semana", "hours_per_week": "horas_por_semana",
+    "hours-per-week": "horas_por_semana", "horas_semana": "horas_por_semana",
     "ganancia_capital": "ganancia_capital", "capital_gain": "ganancia_capital",
     "perdida_capital": "perdida_capital", "capital_loss": "perdida_capital",
     "clase_trabajo": "clase_trabajo", "workclass": "clase_trabajo",
@@ -127,24 +151,59 @@ ALIAS_CSV = {
 }
 
 DEFAULTS_LOTE = {
-    "edad": 40, "educacion": 12, "horas_por_semana": 52,
+    "edad": 38, "educacion": 13, "horas_por_semana": 40,
     "ganancia_capital": 0, "perdida_capital": 0,
-    "clase_trabajo": "Otro (Federal, Local, Autónomo inc., Sin paga)",
-    "estado_civil": "Otro (Divorciado, Viudo, Separado, Cónyuge ausente)",
+    "clase_trabajo": "Empleado sector privado",
+    "estado_civil": "Casado/a (cónyuge presente)",
     "ocupacion": "Otro (Admin, Fuerzas Armadas, Operarios, Limpieza, Doméstico)",
-    "relacion_familiar": "Otro (Esposo, Otro pariente, Soltero no casado)",
-    "pais_origen": "Otro país",
+    "relacion_familiar": "Esposa",
+    "pais_origen": "Estados Unidos",
 }
 
 # Perfil de control para el test de humo: deberia dar probabilidad ALTA
 PERFIL_CONTROL = {
-    "edad": 52, "educacion": 16, "horas_por_semana": 52,
-    "ganancia_capital": 5000, "perdida_capital": 0,
+    "edad": 45, "educacion": 18, "horas_por_semana": 45,
+    "ganancia_capital": 0, "perdida_capital": 0,
     "clase_trabajo": "Empleado sector privado",
     "estado_civil": "Casado/a (cónyuge presente)",
     "ocupacion": "Gerencia / Ejecutivo",
-    "relacion_familiar": "No vive con familia",
+    "relacion_familiar": "Esposa",
     "pais_origen": "Estados Unidos",
+}
+
+# Perfiles de ejemplo que el usuario puede cargar con un clic.
+PERFILES_EJEMPLO = {
+    "alto": {
+        "titulo": "Ejemplo >50K",
+        "descripcion": "Gerente de 45 años, licenciado, casado, 45 h/semana",
+        "datos": PERFIL_CONTROL,
+    },
+    "tipico": {
+        "titulo": "Ejemplo típico",
+        "descripcion": "Perfil mediano del dataset: 38 años, bachillerato, 40 h/semana",
+        "datos": {
+            "edad": 38, "educacion": 13, "horas_por_semana": 40,
+            "ganancia_capital": 0, "perdida_capital": 0,
+            "clase_trabajo": "Empleado sector privado",
+            "estado_civil": "Casado/a (cónyuge presente)",
+            "ocupacion": "Otro (Admin, Fuerzas Armadas, Operarios, Limpieza, Doméstico)",
+            "relacion_familiar": "Esposa",
+            "pais_origen": "Estados Unidos",
+        },
+    },
+    "bajo": {
+        "titulo": "Ejemplo ≤50K",
+        "descripcion": "Joven de 30 años, sin pareja, oficios, 40 h/semana",
+        "datos": {
+            "edad": 30, "educacion": 12, "horas_por_semana": 40,
+            "ganancia_capital": 0, "perdida_capital": 0,
+            "clase_trabajo": "Empleado sector privado",
+            "estado_civil": "Nunca se casó",
+            "ocupacion": "Oficios / Reparación",
+            "relacion_familiar": "No vive con familia",
+            "pais_origen": "Estados Unidos",
+        },
+    },
 }
 
 # =========================================================================
@@ -256,7 +315,7 @@ def preprocesar_lote(df_raw: pd.DataFrame):
 # 3) CARGA Y DIAGNOSTICO DEL MODELO
 # =========================================================================
 
-RUTA_MODELO = Path(__file__).with_name("logistica_calibrada_v2.joblib")
+RUTA_MODELO = Path(__file__).with_name("logistica_calibrada_v3.joblib")
 
 
 def _indice_positivo(clases: list) -> int:
@@ -294,8 +353,10 @@ def cargar_modelo(ruta_str: str | None = None) -> dict:
         modelo = obj.get("modelo")
         variables = obj.get("variables")
         umbral = obj.get("umbral", 0.5)
+        meta = {k: v for k, v in obj.items() if k not in ("modelo", "variables", "umbral")}
     else:
         modelo, variables, umbral = obj, getattr(obj, "feature_names_in_", None), 0.5
+        meta = {}
 
     if modelo is None:
         return {"error": "El paquete no contiene 'modelo'."}
@@ -333,6 +394,7 @@ def cargar_modelo(ruta_str: str | None = None) -> dict:
         "clases": clases,
         "idx_pos": _indice_positivo(clases),
         "avisos": avisos,
+        "meta": meta,
         "tamano_mb": round(ruta.stat().st_size / 1e6, 2),
     }
 

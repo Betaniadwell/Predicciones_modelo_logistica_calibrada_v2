@@ -1,5 +1,5 @@
-# app.py — Income Classifier Pro v3.0 (tema oscuro editorial)
-# Dataset: UCI Adult Census · Modelo: Regresión Logística + Calibración
+# app.py — Income Classifier Pro v4.0 (tema oscuro editorial)
+# Dataset: UCI Adult Census real (48.790 personas) · Modelo: Regresión Logística calibrada
 import sys
 
 import numpy as np
@@ -11,9 +11,12 @@ import streamlit as st
 from core import (
     COLUMNAS_MODELO,
     DEFAULTS_LOTE,
+    ETIQUETAS_EDUCACION,
     MAPEO_CATEGORIAS,
     NIVELES_EDUCACION,
+    PERFILES_EJEMPLO,
     PERFIL_CONTROL,
+    TASA_BASE,
     _estimador_base,
     _log_odds,
     cargar_modelo,
@@ -206,10 +209,10 @@ if "error" in paquete:
     st.error(f"**No se puede usar el modelo.** {paquete['error']}")
     with st.expander("Cómo solucionarlo"):
         st.markdown("""
-1. Comprueba que `logistica_calibrada_v2.joblib` está **en la misma carpeta** que `core.py`.
+1. Comprueba que `logistica_calibrada_v3.joblib` está **en la misma carpeta** que `core.py`.
 2. Si el error es de versión: instala localmente la misma `scikit-learn` con la que entrenaste,
-   abre el notebook y vuelve a guardar: `joblib.dump({"modelo": m, "variables": cols, "umbral": u}, "logistica_calibrada_v2.joblib")`.
-3. Sube los archivos con estos **nombres exactos**: `app.py`, `core.py`, `requirements.txt`, `logistica_calibrada_v2.joblib`.
+   abre el notebook y vuelve a guardar: `joblib.dump({"modelo": m, "variables": cols, "umbral": u}, "logistica_calibrada_v3.joblib")`.
+3. Sube los archivos con estos **nombres exactos**: `app.py`, `core.py`, `requirements.txt`, `logistica_calibrada_v3.joblib`.
 4. Si usas Git LFS para el `.joblib`, comprueba que Streamlit Cloud lo descarga bien (mejor sin LFS si pesa < 100 MB).
         """)
     st.stop()
@@ -238,6 +241,12 @@ with st.sidebar:
         help="Bájalo para captar más >50K (más falsos positivos); súbelo para ser conservador.",
     )
     st.caption(f"Umbral actual: **{umbral_usuario:.0%}** | Óptimo del paquete: **{umbral_optimo:.0%}**")
+    st.info(
+        f"**Dato de referencia:** en los datos reales de entrenamiento, "
+        f"el **{TASA_BASE:.1%}** de las personas gana más de 50K/año. "
+        f"Por eso una probabilidad del {TASA_BASE:.0%} significa “esta persona está en el grupo mayoritario”.",
+        icon="📊",
+    )
 
     st.divider()
     st.markdown("### 📥 Predicción por lotes (CSV)")
@@ -285,6 +294,7 @@ with st.sidebar:
             "Umbral embebido": round(umbral_optimo, 4),
             "sklearn runtime": sklearn.__version__,
             "Avisos de carga": paquete.get("avisos", []),
+            **{k: v for k, v in paquete.get("meta", {}).items()},
         })
         st.markdown("**Test de humo** (perfil alto, debería salir >50K):")
         try:
@@ -320,13 +330,46 @@ col_title, col_badge = st.columns([5, 1])
 with col_title:
     st.markdown('<p class="main-header">Estimador de ingresos<br>&gt; 50K / año</p>', unsafe_allow_html=True)
     st.markdown(
-        '<p class="sub-header">Regresión logística calibrada · UCI Adult Census · 24 variables · '
-        'umbral optimizado</p>', unsafe_allow_html=True,
+        '<p class="sub-header">Regresión logística calibrada · UCI Adult Census (48.790 personas reales) · '
+        '24 variables · AUC 0,902</p>', unsafe_allow_html=True,
     )
 with col_badge:
-    st.markdown('<br><span class="badge">v3.0 · dark</span>', unsafe_allow_html=True)
+    st.markdown('<br><span class="badge">v4.0 · dark</span>', unsafe_allow_html=True)
 
 st.markdown('<div class="rule"></div>', unsafe_allow_html=True)
+
+# ==========================================
+# EJEMPLOS RAPIDOS (fuera del formulario: rellenan y calculan al instante)
+# ==========================================
+CLAVES_EJEMPLO = {
+    "edad": "f_edad",
+    "educacion": "f_educacion",
+    "horas_por_semana": "f_horas",
+    "ganancia_capital": "f_ganancia",
+    "perdida_capital": "f_perdida",
+    "clase_trabajo": "sel_clase_trabajo",
+    "estado_civil": "sel_estado_civil",
+    "ocupacion": "sel_ocupacion",
+    "relacion_familiar": "sel_relacion_familiar",
+    "pais_origen": "sel_pais_origen",
+}
+
+
+def _cargar_ejemplo(clave: str) -> None:
+    datos = PERFILES_EJEMPLO[clave]["datos"]
+    for campo, key in CLAVES_EJEMPLO.items():
+        st.session_state[key] = datos[campo]
+    st.session_state["_autocalcular"] = True
+
+
+st.markdown("### ⚡ Empieza con un ejemplo")
+st.caption("Un clic: rellena el formulario y calcula el resultado al instante.")
+b1, b2, b3 = st.columns(3)
+for _col, _clave, _tipo in ((b1, "alto", "primary"), (b2, "tipico", "secondary"), (b3, "bajo", "secondary")):
+    with _col:
+        if st.button(PERFILES_EJEMPLO[_clave]["titulo"], use_container_width=True, type=_tipo):
+            _cargar_ejemplo(_clave)
+        st.caption(PERFILES_EJEMPLO[_clave]["descripcion"])
 
 # ==========================================
 # FORMULARIO
@@ -337,24 +380,20 @@ with st.form("form_single_pred", border=True):
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown("**Demografía**")
-        edad = st.number_input("Edad", 17, 90, 40, help="Rango de entrenamiento: 17–90")
+        edad = st.number_input("Edad", 17, 90, 38, key="f_edad", help="Rango de entrenamiento: 17–90")
         educacion = st.selectbox(
-            "Años de educación", NIVELES_EDUCACION, index=NIVELES_EDUCACION.index(12),
-            format_func=lambda x: (
-                f"{x:g} años (" + ("Doctorado" if x >= 20 else "Máster" if x >= 18
-                else "Licenciatura" if x >= 16 else "Secundario" if x >= 12
-                else "Primaria/Secundario incompleta") + ")"
-            ),
+            "Años de educación", NIVELES_EDUCACION, index=NIVELES_EDUCACION.index(13),
+            key="f_educacion",
+            format_func=lambda x: f"{x:g} años · {ETIQUETAS_EDUCACION.get(x, '')}",
         )
     with c2:
         st.markdown("**Economía / trabajo**")
-        semanas = st.slider(
-            "Semanas trabajadas / año", 0, 52, 52,
-            help="Se guarda en la columna del modelo 'horas_por_semana' (máx 52). "
-                 "Si tu modelo se entrenó con horas/semana (máx 99), corrige ESCALADO y este control.",
+        horas = st.slider(
+            "Horas por semana", 1, 99, 40, key="f_horas",
+            help="Horas trabajadas a la semana (columna hours-per-week del UCI Adult: 1–99).",
         )
-        ganancia = st.number_input("Ganancia de capital (USD)", 0, 99999, 0, step=100)
-        perdida = st.number_input("Pérdida de capital (USD)", 0, 4356, 0, step=50)
+        ganancia = st.number_input("Ganancia de capital (USD)", 0, 99999, 0, step=100, key="f_ganancia")
+        perdida = st.number_input("Pérdida de capital (USD)", 0, 4356, 0, step=50, key="f_perdida")
     with c3:
         st.markdown("**Categorías (one-hot)**")
         etiquetas_grupo = {
@@ -368,16 +407,19 @@ with st.form("form_single_pred", border=True):
         for grupo, opciones in MAPEO_CATEGORIAS.items():
             opts_sorted = sorted(opciones, key=lambda k: (opciones[k] is None, k))
             elegido = st.selectbox(etiquetas_grupo[grupo], opts_sorted, key=f"sel_{grupo}")
-            elecciones[grupo] = opciones[elegido]
+            # la etiqueta de UI, no el sufijo: la categoria de referencia vale None
+            # y se perderia al pasar por el mapeo
+            elecciones[grupo] = elegido
 
     submitted = st.form_submit_button("🔮 Calcular probabilidad", use_container_width=True, type="primary")
 
 # ==========================================
 # PREDICCIÓN Y RESULTADOS
 # ==========================================
-if submitted:
+autocalcular = st.session_state.pop("_autocalcular", False)
+if submitted or autocalcular:
     datos_input = {
-        "edad": edad, "educacion": educacion, "horas_por_semana": semanas,
+        "edad": edad, "educacion": educacion, "horas_por_semana": horas,
         "ganancia_capital": ganancia, "perdida_capital": perdida,
         **elecciones,
     }
@@ -430,18 +472,25 @@ if submitted:
 
     with r2:
         st.markdown("<br>", unsafe_allow_html=True)
+        lado = "por encima" if prob > TASA_BASE else "por debajo"
+        comparacion = (
+            f"Perfil {lado} de la media de la población "
+            f"({TASA_BASE:.1%} de las personas del dataset gana más de 50K)."
+        )
         if pred_class == 1:
             st.markdown(
                 f'<div class="metric-card"><h3 class="risk-high">Clasificación: ingreso &gt; 50K</h3>'
                 f'<p style="font-size:1.25rem;">Probabilidad: <strong>{prob:.2%}</strong></p>'
-                f'<p>Supera el umbral de decisión ({umbral_usuario:.0%}).</p></div>',
+                f'<p>Supera el umbral de decisión ({umbral_usuario:.0%}).</p>'
+                f'<p style="font-size:0.85rem;opacity:0.8;">{comparacion}</p></div>',
                 unsafe_allow_html=True,
             )
         else:
             st.markdown(
                 f'<div class="metric-card"><h3 class="risk-low">Clasificación: ingreso ≤ 50K</h3>'
                 f'<p style="font-size:1.25rem;">Probabilidad: <strong>{prob:.2%}</strong></p>'
-                f'<p>No supera el umbral de decisión ({umbral_usuario:.0%}).</p></div>',
+                f'<p>No supera el umbral de decisión ({umbral_usuario:.0%}).</p>'
+                f'<p style="font-size:0.85rem;opacity:0.8;">{comparacion}</p></div>',
                 unsafe_allow_html=True,
             )
 
@@ -524,7 +573,7 @@ if submitted:
 # ==========================================
 st.markdown(f"""
 <div class="footer">
-  <strong>Income Classifier Pro v3.0</strong> · Regresión logística calibrada · UCI Adult Census<br>
+  <strong>Income Classifier Pro v4.0</strong> · Regresión logística calibrada · UCI Adult Census real (48.790 personas)<br>
   ⚠️ <em>Herramienta educativa. No usar para decisiones reales de crédito, empleo o seguros
   sin validación legal y ética rigurosa.</em>
 </div>

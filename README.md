@@ -11,9 +11,17 @@ dataset UCI Adult Census.
 | :--- | :--- |
 | Modelo | `CalibratedClassifierCV` (LogisticRegression, 5 folds) |
 | Variables | 24 (5 numéricas escaladas + 19 dummies one-hot) |
-| Umbral óptimo | `0.20` |
-| Dataset | UCI Adult Census |
+| Umbral óptimo | `0.3445` (max-F1 sobre predicciones out-of-fold) |
+| Dataset | **UCI Adult Census real** — `dataset _original.xlsx`, 48.790 personas |
+| Tasa base >50K | **23,94 %** de las personas del dataset |
+| AUC (out-of-fold) | **0,9016** · F1 0,682 · calibración: media predicha 0,2394 = real 0,2394 |
 | scikit-learn | **1.6.1** (fijada: es la del entrenamiento) |
+
+> **v4.0 — el modelo se reentrenó sobre el dataset real.** La v2 se había entrenado sobre un
+> CSV sintético con solo **5,76 %** de casos `>50K`, por lo que el modelo **subestimaba la
+> probabilidad unas 4 veces** (media predicha 0,064 frente a una tasa real de 0,239) y la app
+> clasificaba casi siempre `≤50K`. Con el dataset real, la probabilidad coincide con la de
+> las personas reales y las tasas por segmento cuadran con las empíricas.
 
 ---
 
@@ -21,20 +29,31 @@ dataset UCI Adult Census.
 
 ```
 income_classifier_pro/
-├── app.py                        # Interfaz web Streamlit
-├── api.py                        # API REST FastAPI
-├── core.py                       # Lógica compartida: preprocesado + carga del modelo
-├── logistica_calibrada_v2.joblib # El modelo entrenado (OBLIGATORIO)
+├── app.py                          # Interfaz web Streamlit (v4.0)
+├── api.py                          # API REST FastAPI
+├── core.py                         # Lógica compartida: preprocesado + carga del modelo
+├── logistica_calibrada_v3.joblib  # El modelo entrenado (OBLIGATORIO)
 ├── requirements.txt
-├── render.yaml                   # Despliegue de la API en Render
-├── Dockerfile                    # Despliegue de la API en Docker / Cloud Run
-├── serve_publico.js              # Proxy inverso local (web + API en un solo enlace)
-├── compartir.bat                 # Levanta todo y publica con ngrok
-├── abrir_app.bat                 # Solo la web, en local
-└── .streamlit/config.toml        # Tema oscuro de la web
+├── render.yaml                     # Despliegue de la API en Render
+├── Dockerfile                      # Despliegue de la API en Docker / Cloud Run
+├── serve_publico.js                # Proxy inverso local (web + API en un solo enlace)
+├── compartir.bat                   # Levanta todo y publica con ngrok
+├── abrir_app.bat                   # Solo la web, en local
+└── .streamlit/config.toml          # Tema oscuro de la web
 ```
 
 > `core.py` no importa ni `streamlit` ni `fastapi`: es lógica pura y la comparten ambos.
+
+### Variables de entrada
+
+| Variable | Rango | Nota |
+| :--- | :--- | :--- |
+| `edad` | 17–90 | |
+| `educacion` | 0–20 | Años de formación: 0, 3, 5.5, 7.5, 9, 10, 11, 12, 13, 14, 16, 18, 19, 20 |
+| `horas_por_semana` | 1–99 | **Horas por semana** (columna `hours-per-week` del UCI Adult) |
+| `ganancia_capital` | 0–99999 | USD |
+| `perdida_capital` | 0–4356 | USD |
+| `clase_trabajo`, `estado_civil`, `ocupacion`, `relacion_familiar`, `pais_origen` | etiquetas | Se aceptan en español **y** en inglés (UCI) |
 
 ---
 
@@ -44,7 +63,7 @@ income_classifier_pro/
    - `app.py`
    - `core.py`
    - `requirements.txt`
-   - `logistica_calibrada_v2.joblib` **(¡Obligatorio!)**
+   - `logistica_calibrada_v3.joblib` **(¡Obligatorio!)**
    - `.streamlit/config.toml`
 2. Entra en [share.streamlit.io](https://share.streamlit.io/) con tu cuenta de GitHub.
 3. **New App** → repo, rama `main`, archivo `app.py`.
@@ -126,22 +145,22 @@ Documentación interactiva (Swagger UI): **`/docs`** · ReDoc: **`/redoc`**
 curl -X POST http://localhost:8000/predict \
   -H "Content-Type: application/json" \
   -d '{
-    "edad": 52, "educacion": 16, "horas_por_semana": 52,
-    "ganancia_capital": 5000, "perdida_capital": 0,
+    "edad": 45, "educacion": 18, "horas_por_semana": 45,
+    "ganancia_capital": 0, "perdida_capital": 0,
     "clase_trabajo": "Empleado sector privado",
     "estado_civil": "Casado/a (cónyuge presente)",
     "ocupacion": "Gerencia / Ejecutivo",
-    "relacion_familiar": "No vive con familia",
+    "relacion_familiar": "Esposa",
     "pais_origen": "Estados Unidos"
   }'
 ```
 
 ```json
 {
-  "prob_50k": 0.591069,
+  "prob_50k": 0.841833,
   "clase": ">50K",
-  "umbral_aplicado": 0.2,
-  "log_odds": 0.368385
+  "umbral_aplicado": 0.3445,
+  "log_odds": 1.671929
 }
 ```
 
@@ -159,19 +178,31 @@ El umbral se puede ajustar por petición: `POST /predict?umbral=0.7`.
 
 | Ítem | Verificación |
 | :--- | :--- |
-| **`ESCALADO` en `core.py`** | ¿Coincide EXACTAMENTE con el notebook de entrenamiento? Especialmente `horas_por_semana` (¿52 semanas o 100 horas?). |
+| **`ESCALADO` en `core.py`** | ¿Coincide EXACTAMENTE con el notebook de entrenamiento? En v4: `horas_por_semana` = **(0, 99)**, porque el UCI usa *horas por semana*. |
 | **`COLUMNAS_MODELO`** | ¿El orden y los nombres son idénticos a `paquete["variables"]`? |
 | **`MAPEO_CATEGORIAS`** | ¿Cubre todas las dummies que generó `pd.get_dummies(drop_first=True)`? |
 | **Versión de scikit-learn** | Fijada a `1.6.1` en `requirements.txt`: es la del entrenamiento. Si el `.joblib` falla al cargar en otro entorno, es que la versión difiere. |
 | **Tamaño del `.joblib`** | Si > 100 MB, usa Git LFS o Hugging Face Spaces. |
 
-### ⚠️ Si "Predice Todo <50K"
+### ⚠️ Si "Predice Todo ≤50K"
 
-1. Abre la app → sidebar → **🎯 Umbral de decisión** → bájalo a 0.10–0.30.
-2. Prueba un perfil obvio >50K: edad 50, educación 16, 52 semanas, ganancia 5000,
-   ocupación *Gerencia / Ejecutivo*, clase *Privado*, casado, EE.UU.
-3. Si sigue <50K, hay **desajuste de preprocesado**: compara `ESCALADO` y `COLUMNAS_MODELO`
-   de `core.py` contra tu `train.ipynb`.
+Comprueba, en este orden:
+
+1. **La tasa base del dataset.** En los datos reales el `23,94 %` gana más de 50K; una
+   probabilidad por debajo de ese 24 % significa "perfil en el grupo mayoritario", no un fallo.
+   La web muestra este dato en el panel lateral.
+2. **Que el modelo se haya entrenado sobre los datos reales.** Un dataset sintético con muy
+   pocos positivos desplaza todo el rango de probabilidades a la baja (fue exactamente el
+   fallo de la v2). Comprueba `paquete["meta"]["datos_entrenamiento"]` en `/model-info`.
+3. **El desajuste de `ESCALADO`.** Compara `ESCALADO` y `COLUMNAS_MODELO` de `core.py`
+   contra tu `train.ipynb`. El error típico es `horas_por_semana`: si el dataset tiene
+   *semanas* (0–52) y tú aplicas *horas* (0–99), todas las probabilidades se hunden.
+
+### ⚠️ Si al elegir la categoría "Otro (...)" salta un error
+
+La app debe pasar la **etiqueta** de la UI al preprocesador, no el sufijo interno: la
+categoría de referencia vale `None` y se perdería por el camino. Revisa que
+`elecciones[grupo] = elegido` (no `= opciones[elegido]`).
 
 ---
 
@@ -180,7 +211,7 @@ El umbral se puede ajustar por petición: `POST /predict?umbral=0.7`.
 ```python
 from core import PERFIL_CONTROL, predecir_uno
 print(predecir_uno(PERFIL_CONTROL))
-# {'prob_50k': 0.591069, 'clase': '>50K', 'umbral_aplicado': 0.2, 'log_odds': 0.368385}
+# {'prob_50k': 0.841833, 'clase': '>50K', 'umbral_aplicado': 0.3445, 'log_odds': 1.671929}
 ```
 
 ---

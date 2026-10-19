@@ -19,8 +19,10 @@ from pydantic import BaseModel, Field
 from core import (
     COLUMNAS_MODELO,
     DEFAULTS_LOTE,
+    ESCALADO,
     MAPEO_CATEGORIAS,
     NIVELES_EDUCACION,
+    TASA_BASE,
     cargar_modelo,
     construir_vector_modelo,
     preprocesar_lote,
@@ -32,7 +34,7 @@ app = FastAPI(
         "Estimador de ingresos >50K/año sobre UCI Adult Census. "
         "Regresión logística calibrada con 24 variables y umbral optimizado."
     ),
-    version="3.0.0",
+    version="4.0.0",
     contact={"name": "Income Classifier Pro"},
 )
 
@@ -51,7 +53,7 @@ app.add_middleware(
 class Registro(BaseModel):
     edad: float = Field(..., ge=0, le=90, description="Edad en años (17-90 en entrenamiento)")
     educacion: float = Field(..., ge=0, le=20, description="Años de educación formal")
-    horas_por_semana: float = Field(..., ge=0, le=52, description="Semanas trabajadas al año")
+    horas_por_semana: float = Field(..., ge=0, le=99, description="Horas trabajadas por semana (1-99 en entrenamiento)")
     ganancia_capital: float = Field(..., ge=0, le=99999, description="Ganancia de capital en USD")
     perdida_capital: float = Field(..., ge=0, le=4356, description="Pérdida de capital en USD")
     clase_trabajo: str = Field(..., description="Etiqueta de clase de trabajo")
@@ -100,7 +102,7 @@ def _a_datos(reg: Registro) -> dict:
 def raiz():
     return {
         "servicio": "Income Classifier API",
-        "version": "3.0.0",
+        "version": "4.0.0",
         "docs": "/docs",
         "endpoints": {
             "GET /health": "Estado del servicio y del modelo",
@@ -129,22 +131,18 @@ def health():
 def model_info():
     pkg = _paquete()
     return {
-        "nombre": "logistica_calibrada_v2",
+        "nombre": pkg.get("meta", {}).get("nombre", "logistica_calibrada_v3"),
         "tipo_modelo": type(pkg["modelo"]).__name__,
         "n_variables": len(pkg["variables"]),
         "variables": pkg["variables"],
         "clases": pkg["clases"],
         "umbral_por_defecto": pkg["umbral"],
-        "escalado": {
-            "edad": [0, 90],
-            "anios_educacion": [0, 20],
-            "horas_por_semana": [0, 52],
-            "ganancia_capital": [0, 99999],
-            "perdida_capital": [0, 4356],
-        },
+        "tasa_base": TASA_BASE,
+        "escalado": {k: list(v) for k, v in ESCALADO.items()},
         "niveles_educacion": NIVELES_EDUCACION,
         "categorias": {g: list(opts) for g, opts in MAPEO_CATEGORIAS.items()},
         "valores_por_defecto": DEFAULTS_LOTE,
+        **{k: v for k, v in pkg.get("meta", {}).items() if k != "nombre"},
     }
 
 
