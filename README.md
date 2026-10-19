@@ -12,7 +12,7 @@ dataset UCI Adult Census.
 | Variables | 24 (5 numéricas escaladas + 19 dummies one-hot) |
 | Umbral óptimo | `0.20` |
 | Dataset | UCI Adult Census |
-| scikit-learn | ≥ 1.3.2 (validado en 1.6.1) |
+| scikit-learn | **1.6.1** (fijada: es la del entrenamiento) |
 
 ---
 
@@ -154,7 +154,7 @@ El umbral se puede ajustar por petición: `POST /predict?umbral=0.7`.
 | **`ESCALADO` en `core.py`** | ¿Coincide EXACTAMENTE con el notebook de entrenamiento? Especialmente `horas_por_semana` (¿52 semanas o 100 horas?). |
 | **`COLUMNAS_MODELO`** | ¿El orden y los nombres son idénticos a `paquete["variables"]`? |
 | **`MAPEO_CATEGORIAS`** | ¿Cubre todas las dummies que generó `pd.get_dummies(drop_first=True)`? |
-| **Versión de scikit-learn** | Si al cargar el `.joblib` falla, es que el runtime difiere del entrenamiento. Reentrena o fija la versión. |
+| **Versión de scikit-learn** | Fijada a `1.6.1` en `requirements.txt`: es la del entrenamiento. Si el `.joblib` falla al cargar en otro entorno, es que la versión difiere. |
 | **Tamaño del `.joblib`** | Si > 100 MB, usa Git LFS o Hugging Face Spaces. |
 
 ### ⚠️ Si "Predice Todo <50K"
