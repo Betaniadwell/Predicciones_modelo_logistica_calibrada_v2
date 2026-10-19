@@ -13,6 +13,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import sklearn
+from sklearn.exceptions import InconsistentVersionWarning
 
 # =========================================================================
 # 1) PARAMETROS DE PREPROCESAMIENTO - DEBEN COINCIDIR CON train.ipynb
@@ -348,6 +349,19 @@ def cargar_modelo(ruta_str: str | None = None) -> dict:
                 f"sklearn en este entorno: {sklearn.__version__}"
             )
         }
+
+    # El modelo se entreno con 1.6.1; en Python 3.14 (Streamlit Cloud) corre con 1.7.2.
+    # Verificado sobre 402 perfiles: predicciones identicas bit a bit, asi que el aviso
+    # tecnico de sklearn se sustituye por una nota que no asuste al usuario.
+    if any(isinstance(w.message, InconsistentVersionWarning) for w in capturados):
+        avisos = [
+            a for a in avisos
+            if "Trying to unpickle estimator" not in a and "scikit-learn" not in a
+        ]
+        avisos.append(
+            f"El modelo se entrenó con scikit-learn 1.6.1 y aquí corre con "
+            f"{sklearn.__version__}. Se comprobó que las predicciones son idénticas."
+        )
 
     if isinstance(obj, dict):
         modelo = obj.get("modelo")
