@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY api.py core.py logistica_calibrada_v2.joblib ./
+COPY api.py core.py logistica_calibrada_v3.joblib ./
 
 EXPOSE 8000
 
