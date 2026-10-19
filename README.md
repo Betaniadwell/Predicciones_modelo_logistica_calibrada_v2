@@ -4,7 +4,8 @@ Aplicación web + **API REST** para inferencia con Regresión Logística Calibra
 dataset UCI Adult Census.
 
 - **Web (Streamlit):** https://tu-usuario-tu-repo.streamlit.app
-- **API (FastAPI):** https://tu-api.onrender.com/docs
+- **API (FastAPI):** https://predicciones-modelo-logistica-calibrada.onrender.com/docs
+- **Repo:** https://github.com/Betaniadwell/Predicciones_modelo_logistica_calibrada_v2
 
 | | |
 | :--- | :--- |
@@ -55,10 +56,17 @@ El `.joblib` pesa 16 KB, así que **no hace falta Git LFS**.
 
 ## 🚀 Despliegue de la API
 
-### Opción A — Render.com (gratis, la más simple)
+### Opción A — Render.com (gratis, la más simple) — **YA DESPLEGADA**
 
 El repo ya incluye `render.yaml`. En [render.com](https://render.com) → **New → Blueprint**,
-apunta al repo y Render detecta la configuración. Resultado: `https://tu-api.onrender.com`.
+apunta al repo y Render detecta la configuración.
+
+> **Estado actual:** desplegada y verificada en
+> **https://predicciones-modelo-logistica-calibrada.onrender.com**
+> (`/docs` para Swagger, `/health` para el estado). Plan gratuito: se apaga tras 15 min
+> sin tráfico y la primera petición posterior tarda ~30-50 s en arrancar.
+> Nota: Render sustituye los guiones bajos del nombre del repo por guiones en el
+> hostname, por eso la URL es `predicciones-modelo-logistica-calibrada` (sin `_v2`).
 
 ### Opción B — Docker (Cloud Run, Railway, Fly.io, VPS)
 
@@ -139,7 +147,7 @@ curl -X POST http://localhost:8000/predict \
 
 ```python
 import requests
-r = requests.post("https://tu-api.onrender.com/predict", json=registro, timeout=30)
+r = requests.post("https://predicciones-modelo-logistica-calibrada.onrender.com/predict", json=registro, timeout=30)
 r.json()["prob_50k"]
 ```
 
