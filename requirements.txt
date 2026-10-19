@@ -2,8 +2,13 @@ streamlit>=1.37
 pandas>=2.0
 numpy>=1.24
 joblib>=1.3
-scikit-learn==1.6.1
 plotly>=5.18
 fastapi>=0.110
 uvicorn[standard]>=0.29
 python-multipart>=0.0.9
+
+# scikit-learn: 1.6.1 no tiene wheel para Python 3.14 y su compilacion aborta
+# la instalacion completa de requirements.txt (se pierde plotly y la app no arranca).
+# Verificado: 1.6.1 y 1.7.2 dan predicciones identicas bit a bit (prob 0.841832856).
+scikit-learn==1.6.1; python_version < "3.14"
+scikit-learn>=1.7.2,<1.8; python_version >= "3.14"
