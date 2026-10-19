@@ -27,6 +27,9 @@ income_classifier_pro/
 ├── requirements.txt
 ├── render.yaml                   # Despliegue de la API en Render
 ├── Dockerfile                    # Despliegue de la API en Docker / Cloud Run
+├── serve_publico.js              # Proxy inverso local (web + API en un solo enlace)
+├── compartir.bat                 # Levanta todo y publica con ngrok
+├── abrir_app.bat                 # Solo la web, en local
 └── .streamlit/config.toml        # Tema oscuro de la web
 ```
 
@@ -69,8 +72,28 @@ docker run -p 8000:8000 income-classifier
 ```bash
 pip install -r requirements.txt
 uvicorn api:app --host 0.0.0.0 --port 8000
-ngrok http 8000
 ```
+
+O directamente, con un doble clic a **`compartir.bat`**: levanta la API, la web, un proxy
+inverso y el túnel de ngrok, y te abre el panel de ngrok con la URL pública.
+
+#### El proxy inverso (`serve_publico.js`)
+
+La cuenta de ngrok gratuita admite **un solo hostname**, así que para compartir web y API
+con el mismo enlace hace falta un proxy local (`node serve_publico.js`, puerto 8080) que
+reparta por ruta:
+
+| Ruta | Va a |
+| :--- | :--- |
+| `/predict`, `/predict/*`, `/model-info`, `/health`, `/docs`, `/redoc`, `/openapi.json` | API (8000) |
+| todo lo demás | Web Streamlit (8501) |
+
+El proxy también reenvía el **WebSocket** (`/_stcore/stream`), sin el cual Streamlit no
+funciona a través del túnel.
+
+> **Aviso de ngrok:** la primera visita desde un navegador muestra la página de
+> advertencia de ngrok; hay que pulsar *Visit Site*. A partir de ahí queda cacheada.
+> Para un enlace sin avisos, despliega en Streamlit Cloud (web) y Render (API).
 
 ---
 
